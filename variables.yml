@@ -1,0 +1,19 @@
+flag_dns_recon:
+    type: password
+    length: 12
+    challenge_id: 2
+
+flag_sop_analysis:
+    type: password
+    length: 12
+    challenge_id: 3
+
+flag_manual_rebind:
+    type: password
+    length: 16
+    challenge_id: 4
+
+flag_auto_rebind:
+    type: password
+    length: 16
+    challenge_id: 5

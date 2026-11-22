@@ -1,0 +1,55 @@
+---
+- name: Common configuration on all hosts
+  hosts: hosts
+  become: yes
+  roles:
+    - hosts
+
+- name: Configure attacker host
+  hosts: attacker
+  become: yes
+  roles:
+    - role: user-access
+      user_access_username: user
+      user_access_password: Password123
+      user_access_sudo: True
+    - role: attacker
+    - role: chrony
+
+- name: Configure local recursive DNS server
+  hosts: local-dns
+  become: yes
+  roles:
+    - role: local-dns
+
+- name: Configure victim workstation and IoT service
+  hosts: victim-iot
+  become: yes
+  roles:
+    - role: user-access
+      user_access_username: user
+      user_access_password: Password123
+      user_access_sudo: True
+    - role: victim-iot
+
+- name: Configure network router and packet forwarding
+  hosts: routers
+  become: yes
+  roles:
+    - role: router
+
+- name: Setup platform sandbox logging
+  hosts:
+    - routers
+    - hosts
+  become: yes
+  vars:
+    sandbox_name: seed-dns-rebinding-local
+    central_syslog_ip: 78.128.251.179
+  roles:
+    - role: sandbox-logging
+      slf_destination_port: '{% if hostvars["man"] is defined -%} 514 {%- else -%} 515 {%- endif %}'
+      slf_destination: '{% if hostvars["man"] is defined -%} {{ hostvars["man"].ansible_host }} {%- else -%} {{ central_syslog_ip }} {%- endif %}'
+      slf_sandbox_id: "{{ global_sandbox_id | default(student_id) | default(0) }}"
+      slf_sandbox_name: '{{ global_sandbox_name | default(sandbox_name) }}'
+      slf_pool_id: '{{ global_pool_id | default(None) }}'

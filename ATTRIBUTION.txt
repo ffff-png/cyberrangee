@@ -1,0 +1,9 @@
+This scenario is based on:
+1. SEED Labs: DNS Rebinding Attack Lab
+   Author: Wenliang Du, Syracuse University / SEED Project
+   Website: https://seedsecuritylabs.org/
+   Copyright (c) 2019-2020 Wenliang Du.
+
+2. Scenario structure adapted from CyberRangeCZ template library-junior-hacker:
+   Cybersecurity Laboratory, Faculty of Informatics, Masaryk University
+   https://github.com/cyberrangecz/library-junior-hacker

@@ -1,0 +1,7 @@
+---
+- name: Enable IPv4 packet forwarding on router
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: yes

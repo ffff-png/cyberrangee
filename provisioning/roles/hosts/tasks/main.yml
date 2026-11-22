@@ -1,0 +1,23 @@
+---
+- name: Set up /etc/hosts domain mappings
+  blockinfile:
+    path: /etc/hosts
+    block: |
+      10.1.26.4 www.seedIoT32.com
+      10.1.27.23 www.attacker32.com
+      10.1.27.23 ns.attacker32.com
+      10.1.26.10 local-dns.internal
+
+- name: Install fundamental network and diagnostics packages
+  apt:
+    name:
+      - dnsutils
+      - curl
+      - jq
+      - net-tools
+      - python3
+      - python3-pip
+      - python3-flask
+    state: present
+    update_cache: yes
+  ignore_errors: yes

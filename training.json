@@ -1,0 +1,175 @@
+{
+  "title": "SEED Labs - DNS Rebinding Attack Lab",
+  "description": "Circumvent the browser Same-Origin Policy (SOP) using DNS Rebinding to attack protected IoT devices behind firewalls.",
+  "prerequisites": [
+    "Basic Linux CLI and networking commands (dig, curl, ip)",
+    "Familiarity with DNS resolution, BIND9, and TTL mechanics",
+    "Understanding of the browser Same-Origin Policy (SOP) and JavaScript AJAX"
+  ],
+  "outcomes": [
+    "Understand DNS architecture, authoritative nameservers, forwarders, and caching mechanisms.",
+    "Analyze how browsers enforce the Same-Origin Policy (SOP) on web applications.",
+    "Perform manual DNS Rebinding by manipulating BIND9 zone files, TTL values, and browser DNS caching.",
+    "Execute an automated DNS Rebinding attack against an internal IoT smart thermostat."
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "levels": [
+    {
+      "title": "Introduction to DNS Rebinding",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "minimal_possible_solve_time": null,
+      "content": "# SEED Labs – DNS Rebinding Attack Lab\n\n### Objective & Scenario\nMany Internet of Things (IoT) devices have simple built-in web servers for local configuration and control. Typically, these devices are placed behind private home/office firewalls, unreachable from the outside internet. Because they are shielded by the firewall, many IoT devices do not implement strong authentication mechanisms.\n\nIn this lab, the target is a **smart thermostat** located inside a protected internal network. Outside attackers cannot directly access this IoT device from the internet.\n\nTo compromise the IoT device, the attacker gets an internal user to visit a malicious website hosting attacker-controlled JavaScript. Although the script runs inside the user's browser behind the firewall, the browser's **Same-Origin Policy (SOP)** sandbox prevents the attacker's script from sending requests to the IoT device's origin.\n\nThe objective of this lab is to use the **DNS Rebinding** technique to circumvent this sandbox protection, extract the anti-CSRF secret password from the IoT thermostat, and change the room temperature to dangerously high values.\n\n### General Rules & Anti-Cheating Protection\n* Each student works in an isolated sandbox with **dynamically generated flags**. Sharing flags will not work.\n* Total grading is on **20/20 points**.\n* Using hints incurs a penalty between **-0.5 and -2.0 points**."
+    },
+    {
+      "title": "Access the Sandbox",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "minimal_possible_solve_time": null,
+      "passkey": "start",
+      "cloud_content": "Your first task is to access the sandbox environment. When ready, submit the passkey **`start`**.\n\n### Sandbox Access:\n1. In the topology overview on the right, right-click on **`attacker`** and click **`Open GUI`** (or connect via SSH).\n2. Login with username **`user`** and password **`Password123`** (or username **`seed`** / password **`dees`**).\n3. You also have access to the **`victim-iot`** machine to observe the victim's browser and the thermostat UI.\n\n### Topology Summary:\n* **`attacker`** (10.1.27.23): Attacker VM hosting BIND9 nameserver and attack web server.\n* **`local-dns`** (10.1.26.10): Local DNS server forwarding queries for `attacker32.com`.\n* **`victim-iot`** (10.1.26.4): Protected internal machine running the IoT Thermostat server on port 8080 and Firefox browser.",
+      "local_content": "Submit the answer **start** to begin the training."
+    },
+    {
+      "title": "Task 1: DNS Architecture & Zone Verification",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 5,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_dns_recon",
+      "content": "Before conducting the attack, you must verify the DNS infrastructure. The attacker controls the domain `attacker32.com`. The **`attacker`** VM (10.1.27.23) acts as the authoritative nameserver for this domain. The **`local-dns`** server (10.1.26.10) has been configured with a forward zone for `attacker32.com` pointing to the attacker nameserver.\n\nYour task is to verify that the local DNS server correctly forwards queries to the attacker's nameserver and retrieve the verification flag stored as a `TXT` record for `flag.attacker32.com`.\n\nThe flag is the text string contained in the `TXT` record of `flag.attacker32.com`.",
+      "solution": "```bash\nuser@attacker:~$ dig @10.1.26.10 TXT flag.attacker32.com +short\n```\n\nThe flag is: ${ANSWER}",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "DNS Query Type for Verification",
+          "content": "Use the `TXT` record type with the `dig` command to query text records from the DNS server.",
+          "hint_penalty": 0.5,
+          "order": 0
+        },
+        {
+          "title": "Exact dig command syntax",
+          "content": "Run `dig @10.1.26.10 TXT flag.attacker32.com` from the command line. The response section contains the verification flag.",
+          "hint_penalty": 1.0,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 4,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 2: IoT Device & Same-Origin Policy Analysis",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 8,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_sop_analysis",
+      "content": "On **`victim-iot`** (10.1.26.4), the IoT thermostat server runs on port 8080 (`http://www.seedIoT32.com:8080`). It provides two APIs:\n1. `/password`: returns a secret token required to authenticate temperature adjustments (anti-CSRF protection).\n2. `/temperature`: receives target temperature and the password.\n\nOpen Firefox on **`victim-iot`** and browse to `http://www.attacker32.com:8080/change`. Click the \"Click\" button and open the Web Developer Console (F12 or `Tools -> Web Developer -> Web Console`). Notice that the request fails with a **Same-Origin Policy (SOP)** error because a script loaded from origin `http://www.attacker32.com:8080` is forbidden from reading data from origin `http://www.seedIoT32.com:8080`.\n\nTo complete this level, inspect the IoT device diagnostics at `http://www.seedIoT32.com:8080/info` (or via `curl http://10.1.26.4:8080/info` on `victim-iot`) to retrieve the Device Diagnostic Security Flag.",
+      "solution": "```bash\n# On victim-iot:\ncurl -s http://10.1.26.4:8080/info\n```\n\nThe flag is: ${ANSWER}",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Understanding the SOP Restriction",
+          "content": "The Same-Origin Policy isolates origins defined by (protocol, host, port). Because `www.attacker32.com` does not match `www.seedIoT32.com`, the browser blocks the script from reading `/password`.",
+          "hint_penalty": 0.5,
+          "order": 0
+        },
+        {
+          "title": "Retrieving the Diagnostic Flag",
+          "content": "Browse to `http://www.seedIoT32.com:8080/info` on the victim machine or run `curl http://10.1.26.4:8080/info | jq` from the internal network.",
+          "hint_penalty": 1.0,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 4,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 3: Defeating SOP via Manual DNS Rebinding",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 12,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_manual_rebind",
+      "content": "Now defeat the Same-Origin Policy protection using **DNS Rebinding**:\n\n### Step 1: Modify Malicious JavaScript\nOn the **`attacker`** VM, edit the JavaScript file `/var/www/rebind_malware/templates/js/change.js` (or `/home/seed/rebind_malware/templates/js/change.js`).\nChange the first line from:\n```javascript\nlet url_prefix = 'http://www.seediot32.com:8080'\n```\nto:\n```javascript\nlet url_prefix = 'http://www.attacker32.com:8080'\n```\nNow the JavaScript makes requests to its own origin (`http://www.attacker32.com:8080`), complying with the SOP!\n\n### Step 2: Remap the Domain (DNS Rebinding)\nEdit the zone file `/etc/bind/zone_attacker32.com` on the **`attacker`** VM. Remap `www.attacker32.com` from `10.1.27.23` to the IoT server's IP address **`10.1.26.4`**.\n\n### Step 3: Reload BIND9\nReload BIND9 so it serves the new mapping:\n```bash\nsudo rndc reload attacker32.com\n```\n\n### Step 4: Trigger the Payload on Victim\nOn **`victim-iot`**, wait 10 seconds for the Firefox DNS cache to expire. Then go to `http://www.attacker32.com:8080/change` and click the button.\nThe browser re-resolves `www.attacker32.com` to `10.1.26.4`. The AJAX request reaches the internal IoT thermostat and raises its temperature to **99°C**!\n\nThe flag is the confirmation token released by the IoT server once temperature reaches 99°C.",
+      "solution": "```bash\n# 1. On attacker VM, update /var/www/rebind_malware/templates/js/change.js:\n# let url_prefix = 'http://www.attacker32.com:8080'\n\n# 2. In /etc/bind/zone_attacker32.com, update www record to:\n# www IN A 10.1.26.4\n\n# 3. Reload BIND9:\nsudo rndc reload attacker32.com\n\n# 4. On victim VM, wait 10s and click 'Click' at http://www.attacker32.com:8080/change\n```\n\nThe flag is: ${ANSWER}",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Aligning Request Target in change.js",
+          "content": "Since the page is served from `www.attacker32.com:8080`, the script must make requests to `http://www.attacker32.com:8080`. Update the `url_prefix` variable accordingly.",
+          "hint_penalty": 1.0,
+          "order": 0
+        },
+        {
+          "title": "Zone Modification and DNS Cache Expiration",
+          "content": "Replace the `A` record for `www` in `/etc/bind/zone_attacker32.com` with `10.1.26.4`. Run `sudo rndc reload attacker32.com`. You must wait at least 10 seconds (the Firefox cache expiration configured in Task 1) before clicking the button.",
+          "hint_penalty": 1.5,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 6,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 4: Automated DNS Rebinding Attack",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 15,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_auto_rebind",
+      "content": "In real attacks, attackers do not rely on victims manually clicking buttons at the exact right moment. In this task, you execute an **automated attack** against the IoT thermostat.\n\nThe automated payload is hosted on the attacker web server at `http://www.attacker32.com:8080/`. When the victim opens this page, a JavaScript timer counts down from 10 to 0. When it hits 0, it automatically fetches `/password` and sends a POST request to set the thermostat to a critical **88°C**.\n\n### Attack Procedure:\n1. Reset the `www` DNS record in `/etc/bind/zone_attacker32.com` back to `10.1.27.23` and reload BIND (`sudo rndc reload attacker32.com`).\n2. Open `http://www.attacker32.com:8080/` in Firefox on **`victim-iot`**. The timer begins counting down from 10.\n3. While the countdown is running, switch the `www` DNS record in the zone file to point to the IoT server (`10.1.26.4`) and run `sudo rndc reload attacker32.com`.\n4. When the countdown reaches 0, the browser's DNS cache expires. The browser queries the DNS server, gets `10.1.26.4`, and silently pushes the exploit request to the internal thermostat!\n5. Check the thermostat thermometer at `http://www.seedIoT32.com:8080/`. It will display the critical 88°C overheat state along with your Final Flag!\n\nThe flag is the Critical Overheat Flag displayed on the thermostat interface.",
+      "solution": "```bash\n# 1. Point www back to attacker: www IN A 10.1.27.23\nsudo rndc reload attacker32.com\n\n# 2. Open http://www.attacker32.com:8080 on victim-iot.\n\n# 3. During countdown, change www IN A to 10.1.26.4 and reload:\nsudo rndc reload attacker32.com\n\n# 4. Timer hits 0 -> thermostat reaches 88°C!\n```\n\nThe flag is: ${ANSWER}",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Automated Rebinding Timing and Sequence",
+          "content": "The victim must first load the attack page from the attacker VM (10.1.27.23). Once the page is loaded, update the zone file to point `www` to `10.1.26.4` and run `sudo rndc reload attacker32.com` before the timer expires.",
+          "hint_penalty": 1.0,
+          "order": 0
+        },
+        {
+          "title": "Verifying Critical Temperature Threshold",
+          "content": "Observe the thermometer at `http://www.seedIoT32.com:8080/` on victim-iot. Once temperature equals 88°C, the overheat alert reveals the final flag. You can also view it by running `curl http://10.1.26.4:8080/flag` on victim-iot.",
+          "hint_penalty": 2.0,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 6,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    }
+  ],
+  "estimated_duration": 40,
+  "variant_sandboxes": true
+}

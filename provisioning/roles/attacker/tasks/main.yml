@@ -1,0 +1,74 @@
+---
+- name: Install BIND9 DNS Server on attacker
+  apt:
+    name:
+      - bind9
+      - bind9utils
+      - python3-flask
+    state: present
+    update_cache: yes
+
+- name: Deploy named.conf.local for authoritative zone
+  template:
+    src: named.conf.local.j2
+    dest: /etc/bind/named.conf.local
+    owner: bind
+    group: bind
+    mode: '0644'
+
+- name: Deploy initial zone_attacker32.com
+  template:
+    src: zone_attacker32.com.j2
+    dest: /etc/bind/zone_attacker32.com
+    owner: bind
+    group: bind
+    mode: '0666'
+
+- name: Allow user to edit zone and reload rndc without password
+  copy:
+    content: |
+      ALL ALL=(ALL) NOPASSWD: /usr/sbin/rndc reload attacker32.com
+      ALL ALL=(ALL) NOPASSWD: /bin/systemctl restart bind9
+      ALL ALL=(ALL) NOPASSWD: /bin/systemctl restart rebind_malware
+    dest: /etc/sudoers.d/seed-rebind-attacker
+    mode: '0440'
+
+- name: Deploy attacker web application files
+  copy:
+    src: rebind_malware/
+    dest: /var/www/rebind_malware/
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure student users can edit JavaScript files
+  file:
+    path: /var/www/rebind_malware/templates/js/change.js
+    mode: '0666'
+
+- name: Create symlinks in user homes for easy access
+  file:
+    src: /var/www/rebind_malware
+    dest: "{{ item }}/rebind_malware"
+    state: link
+    force: yes
+  loop:
+    - /home/user
+    - /home/seed
+  ignore_errors: yes
+
+- name: Deploy systemd service for attacker web application
+  template:
+    src: rebind_malware.service.j2
+    dest: /etc/systemd/system/rebind_malware.service
+    mode: '0644'
+
+- name: Enable and restart bind9 and rebind_malware services
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+  loop:
+    - bind9
+    - rebind_malware

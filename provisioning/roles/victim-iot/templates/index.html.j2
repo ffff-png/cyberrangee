@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+   <head>
+      <title>Smart Thermostat IoT Controller</title>
+      <link rel="stylesheet" href="css/style.css"/>
+      <script src="js/jquery-2.2.4.min.js"></script>
+      <style>
+         .flag-alert {
+            display: none;
+            margin: 20px auto;
+            padding: 15px 20px;
+            max-width: 500px;
+            border-radius: 8px;
+            font-family: sans-serif;
+            text-align: center;
+            font-weight: bold;
+         }
+         .alert-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeeba;
+         }
+         .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+         }
+         .diagnostics-box {
+            margin: 15px auto;
+            padding: 10px;
+            font-family: monospace;
+            background: #e9ecef;
+            border-radius: 5px;
+            text-align: center;
+            max-width: 450px;
+         }
+      </style>
+   </head>
+
+   <body>
+     <div id="wrapper">
+       <h2 style="text-align: center; font-family: sans-serif; color: #333;">Smart Home Thermostat</h2>
+
+       <div id="alert-manual" class="flag-alert alert-warning">
+          ⚠️ MANUAL REBINDING ATTACK DETECTED (99&deg;C)<br/>
+          <span style="font-size: 1.1em; color: #000;">Flag: <span id="flag-manual-val">{{ flag_manual }}</span></span>
+       </div>
+
+       <div id="alert-auto" class="flag-alert alert-danger">
+          🔥 CRITICAL OVERHEAT: AUTOMATED REBINDING ATTACK (88&deg;C)<br/>
+          <span style="font-size: 1.1em; color: #000;">Final Flag: <span id="flag-auto-val">{{ flag_auto }}</span></span>
+       </div>
+
+       <div id="thermometer">
+          <div id="temperature" style="height:0" data-value="0&#176;C"></div>
+          <div id="graduations"></div>
+       </div>
+
+       <div id="playground">
+          <div id="range">
+            <input id="minTemp" type="text" value="0">
+            <input type="range" min="0" max="100" value="20">
+            <input id="maxTemp" type="text" value="100">
+	  </div>
+	  <p id="unit">Celsius &#176;C</p>
+       </div>
+
+       <div class="diagnostics-box">
+          Device Diagnostic Token: <code>{{ flag_sop }}</code><br/>
+          <small><a href="/info" target="_blank">View Device Diagnostics JSON</a> | <a href="/flag" target="_blank">Check Flag Status</a></small>
+       </div>
+
+       <p id="info" style="text-align:center; font-family:sans-serif;"></p>
+     </div>
+
+     <script src="./js/main.js"></script>
+     <script>
+       // Check temperature and display alerts if high temperatures reached
+       function checkFlags() {
+          $.get('/temperature', function(data) {
+             if (data && data.temperature) {
+                if (data.temperature == 99) {
+                   $('#alert-manual').show();
+                   $('#alert-auto').hide();
+                } else if (data.temperature == 88) {
+                   $('#alert-auto').show();
+                   $('#alert-manual').hide();
+                }
+             }
+          });
+       }
+       setInterval(checkFlags, 1000);
+     </script>
+    </body>
+</html>

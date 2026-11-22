@@ -1,0 +1,16 @@
+$TTL 10
+@   IN  SOA ns.attacker32.com. admin.attacker32.com. (
+        2024110101
+        10
+        10
+        60
+        10 )
+
+@   IN  NS  ns.attacker32.com.
+
+@   IN  A   10.1.27.23
+ns  IN  A   10.1.27.23
+www IN  A   10.1.27.23
+*   IN  A   10.1.27.23
+
+flag IN TXT "{{ flag_dns_recon }}"

@@ -1,0 +1,107 @@
+---
+- name: Set DNS resolver to local DNS server
+  lineinfile:
+    path: /etc/resolv.conf
+    line: "nameserver 10.1.26.10"
+    insertafter: BOF
+
+- name: Configure resolvconf head file if resolvconf is used
+  lineinfile:
+    path: /etc/resolvconf/resolv.conf.d/head
+    line: "nameserver 10.1.26.10"
+    create: yes
+  ignore_errors: yes
+
+- name: Configure Firefox DNS cache expiration to 10 seconds
+  file:
+    path: /etc/firefox
+    state: directory
+    mode: '0755'
+
+- name: Set Firefox syspref.js for fast DNS rebinding
+  copy:
+    content: |
+      // SEED Labs DNS Rebinding configuration
+      pref("network.dnsCacheExpiration", 10);
+      pref("network.dnsCacheExpirationGracePeriod", 0);
+    dest: /etc/firefox/syspref.js
+    mode: '0644'
+
+- name: Install dependencies for IoT service
+  apt:
+    name:
+      - python3-flask
+      - iptables
+    state: present
+    update_cache: yes
+
+- name: Deploy IoT web server application files
+  copy:
+    src: rebind_iot/
+    dest: /var/www/rebind_iot/
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy dynamic iot.py with APG flags
+  template:
+    src: iot.py.j2
+    dest: /var/www/rebind_iot/iot.py
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy index.html with interactive thermometer and alert banners
+  template:
+    src: index.html.j2
+    dest: /var/www/rebind_iot/templates/index.html
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create symlinks in user homes for easy reference
+  file:
+    src: /var/www/rebind_iot
+    dest: "{{ item }}/rebind_iot"
+    state: link
+    force: yes
+  loop:
+    - /home/user
+    - /home/seed
+  ignore_errors: yes
+
+- name: Deploy systemd service for IoT thermostat
+  template:
+    src: rebind_iot.service.j2
+    dest: /etc/systemd/system/rebind_iot.service
+    mode: '0644'
+
+- name: Enable and restart rebind_iot service
+  systemd:
+    name: rebind_iot
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+
+- name: Configure firewall to protect IoT thermostat from direct outside access
+  iptables:
+    chain: INPUT
+    source: 10.1.27.0/24
+    protocol: tcp
+    destination_port: 8080
+    jump: DROP
+    comment: "Block direct external access to IoT thermostat"
+  ignore_errors: yes
+
+- name: Deploy helper test script on victim
+  copy:
+    content: |
+      #!/usr/bin/env bash
+      echo "=== Testing IoT Thermostat on Localhost ==="
+      curl -s http://127.0.0.1:8080/info | jq . || curl -s http://127.0.0.1:8080/info
+      echo ""
+      echo "=== Current Temperature & Flag Status ==="
+      curl -s http://127.0.0.1:8080/flag | jq . || curl -s http://127.0.0.1:8080/flag
+      echo ""
+    dest: /usr/local/bin/check-iot-status
+    mode: '0755'

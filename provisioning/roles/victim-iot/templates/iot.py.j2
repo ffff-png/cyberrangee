@@ -1,0 +1,111 @@
+from flask import (
+    Blueprint, Flask, redirect, render_template, request, url_for, current_app as app, json
+)
+import flask
+
+bp = Blueprint('iot', __name__)
+
+FLAG_SOP = "{{ flag_sop_analysis }}"
+FLAG_MANUAL = "{{ flag_manual_rebind }}"
+FLAG_AUTO = "{{ flag_auto_rebind }}"
+
+@bp.route('/password', methods=('GET',))
+def password():
+    data = {
+        'password': app.password
+    }
+    return app.response_class(
+        response=json.dumps(data),
+        mimetype='application/json; charset=utf-8'
+    )
+
+@bp.route('/info', methods=('GET',))
+def info():
+    data = {
+        'device': 'Smart Thermostat IoT Controller v2.4',
+        'status': 'online',
+        'firewall_zone': 'internal_trusted',
+        'diagnostics_token': FLAG_SOP
+    }
+    return app.response_class(
+        response=json.dumps(data, indent=2),
+        mimetype='application/json; charset=utf-8'
+    )
+
+@bp.route('/', methods=('GET',))
+def index():
+    return render_template('index.html', flag_sop=FLAG_SOP, flag_manual=FLAG_MANUAL, flag_auto=FLAG_AUTO)
+
+@bp.route('/change', methods=('GET',))
+def change():
+    return render_template('change.html')
+
+@bp.route('/temperature', methods=('GET',))
+def get_temperature():
+    data = {
+        'temperature': app.temperature
+    }
+    return app.response_class(
+        response=json.dumps(data),
+        mimetype='application/json; charset=utf-8'
+    )
+
+@bp.route('/temperature', methods=('POST',))
+def set_temperature():
+    l_password = request.args.get('password', None)
+    if l_password != app.password:
+        return app.response_class(
+            response='wrong password',
+            status=401
+        )
+    temperature = request.args.get('value', None)
+    if not temperature:
+        return app.response_class(
+            response='missing value',
+            status=400,
+            mimetype='text/plain'
+        )
+    try:
+        temperature = int(temperature)
+    except ValueError:
+        return app.response_class(
+            response='invalid temperature',
+            status=400,
+            mimetype='text/plain'
+        )
+    if app.config['LOWEST'] <= temperature <= app.config['HIGHEST']:
+        app.temperature = temperature
+        data = {'temperature': temperature}
+        if temperature == 99:
+            data['status'] = 'manual_attack_succeeded'
+            data['flag'] = FLAG_MANUAL
+            with open('/var/log/iot_thermostat.log', 'a') as f:
+                f.write(f"[ALERT] Temperature set to 99C! Flag: {FLAG_MANUAL}\n")
+        elif temperature == 88:
+            data['status'] = 'automated_attack_succeeded'
+            data['flag'] = FLAG_AUTO
+            with open('/var/log/iot_thermostat.log', 'a') as f:
+                f.write(f"[CRITICAL] Temperature set to 88C! Flag: {FLAG_AUTO}\n")
+        return app.response_class(
+            response=json.dumps(data),
+            mimetype='application/json; charset=utf-8'
+        )
+    else:
+        return app.response_class(
+            response='temperature out of bound',
+            status=400,
+            mimetype='text/plain'
+        )
+
+@bp.route('/flag', methods=('GET',))
+def get_flag():
+    data = {
+        'current_temperature': app.temperature,
+        'flag_sop': FLAG_SOP,
+        'flag_manual': FLAG_MANUAL if app.temperature >= 99 else "Set temperature to 99C to unlock",
+        'flag_auto': FLAG_AUTO if app.temperature == 88 else "Set temperature to 88C via automated attack to unlock"
+    }
+    return app.response_class(
+        response=json.dumps(data, indent=2),
+        mimetype='application/json; charset=utf-8'
+    )
